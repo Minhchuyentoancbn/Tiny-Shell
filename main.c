@@ -24,19 +24,20 @@ int shell_help(char **args);
 void shell_working(char **args);
 int shell_time(char **args);
 int shell_date(char **args);
-int get_current_directory(char **args);
 int set_current_directory(char **args);
 int list_files(char **args);
 int env(char **args);
 int addenv(char **args);
 int path(char **args);
 int addpath(char **args);
+int cls(char **args);
 
 
 HANDLE hJob;
 JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli = {0};
 PROCESS_INFORMATION pi   = {0};
 STARTUPINFO si   = {0};
+int status = 1; /* flag to determine when to exit program */
 
 /*
   List of builtin commands, followed by their corresponding functions.
@@ -51,13 +52,13 @@ char *builtin_str[] = {
     "resume",
     "time",
     "date",
-    "getcwd",
-    "setcwd",
+    "cd",
     "dir",
     "env",
     "addenv",
     "path",
-    "addpath"
+    "addpath",
+    "cls"
 };
 
 int (*builtin_func[]) (char **args) = {
@@ -70,13 +71,13 @@ int (*builtin_func[]) (char **args) = {
     &resume_by_name,
     &shell_time,
     &shell_date,
-    &get_current_directory,
     &set_current_directory,
     &list_files,
     &env,
     &addenv,
     &path,
-    &addpath
+    &addpath,
+    &cls
 };
 
 
@@ -86,12 +87,14 @@ int main(void) {
     jeli.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, &jeli, sizeof(jeli));
 	char **args; /* command line arguments */
-	int status = 1; /* flag to determine when to exit program */
 	char *line;
+    TCHAR infoBuf[BUFFER_SIZE];
+
 	
     printf("\t\tWELCOME TO MY SHELL\n\n");
 	do {
-		printf("myShell>");
+        GetCurrentDirectory(BUFFER_SIZE, infoBuf);
+		printf("%s> $", infoBuf);
 		fflush(stdin);
 		line = read_command_line();
 		args = parse_command(line);
@@ -373,13 +376,13 @@ int shell_help(char **args){
         printf("\nresume <process name>             : Resume a process.");
         printf("\ntime                              : Get the local current time.");
         printf("\ndate                              : Get the local current date.");
-        printf("\ngetcwd                            : Get the current working directory.");
-        printf("\nsetcwd                            : Set the current working directory.");
+        printf("\ncd <new directory>                : Set the current working directory.");
         printf("\ndir                               : List all the files and directory in the working directory.");
         printf("\nenv                               : List all the environment system variables.");
         printf("\naddenv <VARNAME> <NEWVALUE>       : Add an environment variable.");
         printf("\npath                              : List all paths in the environment system variables 'Path'.");
         printf("\naddpath <NEW PATH>                : Add new path.");
+        printf("\ncls                               : Clear the console screen.");
         printf("\n\n");
     }
     else printf("\nBad command....\n\n");
@@ -440,23 +443,6 @@ int shell_date(char **args){
     GetLocalTime(&st);
   
     wprintf(L"\nToday is: %d-%02d-%02d\n\n", st.wYear, st.wMonth, st.wDay);
-
-    return 0;
-}
-
-int get_current_directory(char **args){
-    if (args[1]){
-        printf("\nBad command....\n\n");
-        return 0;
-    }
-    TCHAR infoBuf[BUFFER_SIZE];
-
-    // Get the current working directory
-
-    if(!GetCurrentDirectory(BUFFER_SIZE, infoBuf))
-    printf("\nGet Current Directory failed!\n\n");
-
-    printf("\nYour current directory is: %s\n\n", infoBuf);
 
     return 0;
 }
@@ -695,4 +681,59 @@ int addpath(char **args){
 
     free(pszOldVal);
     return 0;
+}
+
+
+int cls(char **args)
+
+{   if (args[1]){
+    printf("\nBad command ....\n\n");
+    return 0;
+}
+
+
+    HANDLE hConsole;
+    hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    COORD coordScreen = { 0, 0 };    // home for the cursor
+    DWORD cCharsWritten;
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    DWORD dwConSize;
+
+    // Get the number of character cells in the current buffer.
+    if (!GetConsoleScreenBufferInfo(hConsole, &csbi))
+    {
+        return 0;
+    }
+
+    dwConSize = csbi.dwSize.X * csbi.dwSize.Y;
+
+    // Fill the entire screen with blanks.
+    if (!FillConsoleOutputCharacter(hConsole,        // Handle to console screen buffer
+                                    (TCHAR)' ',      // Character to write to the buffer
+                                    dwConSize,       // Number of cells to write
+                                    coordScreen,     // Coordinates of first cell
+                                    &cCharsWritten)) // Receive number of characters written
+    {
+        return 0;
+    }
+
+    // Get the current text attribute.
+    if (!GetConsoleScreenBufferInfo(hConsole, &csbi))
+    {
+        return 0;
+    }
+
+    // Set the buffer's attributes accordingly.
+    if (!FillConsoleOutputAttribute(hConsole,         // Handle to console screen buffer
+                                    csbi.wAttributes, // Character attributes to use
+                                    dwConSize,        // Number of cells to set attribute
+                                    coordScreen,      // Coordinates of first cell
+                                    &cCharsWritten))  // Receive number of characters written
+    {
+        return 0;
+    }
+
+    // Put the cursor at its home coordinates.
+    SetConsoleCursorPosition(hConsole, coordScreen);
+
 }
