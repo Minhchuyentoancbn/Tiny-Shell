@@ -4,7 +4,7 @@ A simple shell like Windows Powershell using C and Windows API
 ## Shell features:
 - Receive commands from user and create processes in foreground mode and background mode.
 - Enumerate information about child processes.
-- Kill, suspend, resume a child process given its name.
+- Kill, suspend, resume a child process given its name or its ID.
 - Change current working directory, list all files and sub directories.
 - Display current date and time.
 - Display "Path" and others environment variables.
