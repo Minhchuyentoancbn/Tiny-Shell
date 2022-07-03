@@ -31,6 +31,9 @@ int addenv(char **args);
 int path(char **args);
 int addpath(char **args);
 int cls(char **args);
+int kill_process_by_id(char **args);
+int suspend_by_id(char **args);
+int resume_by_id(char **args);
 
 
 HANDLE hJob;
@@ -45,11 +48,14 @@ int status = 1; /* flag to determine when to exit program */
 char *builtin_str[] = {
     "help",
     "kill",
+    "kill_id",
     "exec",
     "list",
     "exit",
     "pause",
+    "pause_id",
     "resume",
+    "resume_id",
     "time",
     "date",
     "cd",
@@ -64,11 +70,14 @@ char *builtin_str[] = {
 int (*builtin_func[]) (char **args) = {
     &shell_help,
     &kill_process_by_name,
+    &kill_process_by_id,
     &shell_excute,
     &shell_print_processes_info,
     &shell_exit,
     &suspend_by_name,
+    &suspend_by_id,
     &resume_by_name,
+    &resume_by_id,
     &shell_time,
     &shell_date,
     &set_current_directory,
@@ -182,10 +191,8 @@ int shell_print_processes_info(char **args){
     HANDLE hSnapShot = INVALID_HANDLE_VALUE;
     PROCESSENTRY32 ProcessInfo = {0};
     ProcessInfo.dwSize = sizeof(PROCESSENTRY32);
-    int count = 0;
-
-
     hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    int count = 0;
     if (INVALID_HANDLE_VALUE == hSnapShot)
     {
         printf("Error...\n");
@@ -371,9 +378,12 @@ int shell_help(char **args){
         printf("\nhelp                              : Print this help.");
         printf("\nexit                              : Exit my shell and killing all child processes.");
         printf("\nkill   <process_name>             : Kill a running process.");
+        printf("\nkill_id <process_id>              : Kill a running process.");
         printf("\nexec   <process_name>             : Run a running process, add & to run in background mode.");
         printf("\npause  <process name>             : Pause a process.");
+        printf("\npause_id <process id>             : Pause a process.");
         printf("\nresume <process name>             : Resume a process.");
+        printf("\nresume_id <process id>            : Resume a process.");
         printf("\ntime                              : Get the local current time.");
         printf("\ndate                              : Get the local current date.");
         printf("\ncd <new directory>                : Set the current working directory.");
@@ -456,11 +466,9 @@ int set_current_directory(char **args){
     TCHAR infoBuf[BUFFER_SIZE];
 
     if(!SetCurrentDirectory(args[1])) printf("\nSet Current Directory failed!\n\n");
-
-    // Get the current working directory
-
-    if(!GetCurrentDirectory(BUFFER_SIZE, infoBuf))
-    printf("\nGet Current Directory() failed!\n\n");
+   
+    if(!GetCurrentDirectory(BUFFER_SIZE, infoBuf))  // Get the current working directory
+        printf("\nGet Current Directory() failed!\n\n");
 
     printf("\nYour current directory is: %s\n\n", infoBuf);
 
@@ -504,7 +512,7 @@ int env(char **args){
         printf("\nBad command....\n\n");
         return 0;
     }
-    LPTSTR lpszVariable;
+LPTSTR lpszVariable;
 LPVOID lpvEnv;
  
 // Get a pointer to the environment block.
@@ -514,8 +522,6 @@ lpvEnv = GetEnvironmentStrings();
 
 if (lpvEnv == NULL) printf("\nGet Environment Strings failed\n\n");
 else printf("\nGet Environment Strings is OK.\n\n");
-
- 
 
 // Variable strings are separated by NULL byte, and the block is terminated by a NULL byte.
 
@@ -736,4 +742,104 @@ int cls(char **args)
     // Put the cursor at its home coordinates.
     SetConsoleCursorPosition(hConsole, coordScreen);
 
+}
+
+
+int kill_process_by_id(char **args)
+{   
+    char *filename = args[1];
+    if (args[2]){
+        printf("\nBad ID....\n\n");
+        return 0;
+    }
+    int check_name = 0;
+    int process_id = strtol(args[1], NULL, 10);
+    HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, NULL);
+    PROCESSENTRY32 pEntry;
+    pEntry.dwSize = sizeof (pEntry);
+    BOOL hRes = Process32First(hSnapShot, &pEntry);
+    while (hRes)
+    {
+        if (process_id == pEntry.th32ProcessID)
+        {   check_name = 1;
+            HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, 0, (DWORD) pEntry.th32ProcessID);
+            if (hProcess != NULL)
+            {   
+                TerminateProcess(hProcess, 9);
+                CloseHandle(hProcess);
+            }
+        }
+        hRes = Process32Next(hSnapShot, &pEntry);
+    }
+    if (check_name == 0){
+        printf("\nBad ID....\n\n");
+    }
+    CloseHandle(hSnapShot);
+    return 0;
+}
+
+int resume_by_id(char **args){
+    char *filename = args[1];
+    if (args[2]){
+        printf("\nBad command or filename....\n\n");
+        return 0;
+    }
+    int process_id = strtol(args[1], NULL, 10);
+    int check_name = 0;
+	HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, NULL);
+    PROCESSENTRY32 pEntry;
+    pEntry.dwSize = sizeof (pEntry);
+    BOOL hRes = Process32First(hSnapShot, &pEntry);
+    while (hRes)
+    {   
+        if (process_id == pEntry.th32ProcessID)
+        {   check_name = 1;
+            HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, 0, (DWORD) pEntry.th32ProcessID);
+            if (hProcess != NULL)
+            {
+
+                resume((DWORD) pEntry.th32ProcessID);
+                CloseHandle(hProcess);
+            }
+        }
+        hRes = Process32Next(hSnapShot, &pEntry);
+    }
+    if (check_name == 0){
+        printf("\nBad file name....\n\n");
+    }
+    CloseHandle(hSnapShot);
+    return 0;
+}
+
+int suspend_by_id(char **args){
+    char *filename = args[1];
+    int check_name = 0;
+    int process_id = strtol(args[1], NULL, 10);
+    if (args[2]){
+        printf("\nBad command or filename....\n\n");
+        return 0;
+    }
+	HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, NULL);
+    PROCESSENTRY32 pEntry;
+    pEntry.dwSize = sizeof (pEntry);
+    BOOL hRes = Process32First(hSnapShot, &pEntry);
+    while (hRes)
+    {
+        if (process_id == pEntry.th32ProcessID)
+        {   check_name = 1;
+            HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, 0, (DWORD) pEntry.th32ProcessID);
+            if (hProcess != NULL)
+            {
+
+                suspend((DWORD) pEntry.th32ProcessID);
+                CloseHandle(hProcess);
+            }
+        }
+        hRes = Process32Next(hSnapShot, &pEntry);
+    }
+    if (check_name == 0){
+        printf("\nBad file name....\n\n");
+    }
+    CloseHandle(hSnapShot);
+    return 0;
 }
